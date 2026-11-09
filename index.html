@@ -131,7 +131,7 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
 <!-- MAIN APP -->
 <div id="app" class="hidden">
   <header class="top">
-    <div class="hello"><small id="greet">Hello</small><h2 id="who"></h2></div>
+    <div class="hello"><small id="greet">Hello</small><h2 id="who"></h2><small id="syncChip" style="margin-top:4px"></small></div>
     <div class="top-actions">
       <button class="icon-btn" id="adminBtn" onclick="toggleAdmin()">⚙️ Admin</button>
       <button class="icon-btn" onclick="logout()">↩ Switch</button>
@@ -181,7 +181,18 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
     </div>
 
     <div class="panel">
-      <h3>Backup & Sync</h3>
+      <h3>☁️ Online Sync</h3>
+      <p class="hint">Paste your Firebase database URL so Islam and Engy see the same data on every device. Do this once on each device (or put it in the file).</p>
+      <div class="row">
+        <input type="text" id="dbUrl" placeholder="https://your-project-default-rtdb.firebaseio.com">
+        <button class="btn" onclick="saveDbUrl()">Connect</button>
+      </div>
+      <div class="row"><span id="syncStatusTxt" class="hint" style="margin:0"></span>
+        <button class="btn ghost sm" onclick="pull(true)">↻ Sync now</button></div>
+    </div>
+
+    <div class="panel">
+      <h3>Backup</h3>
       <p class="hint">Data is saved in this browser only. To move it to another device, export here and import there.</p>
       <div class="row">
         <button class="btn" onclick="exportData()">⬇ Export backup</button>
@@ -205,6 +216,12 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
 <div class="toast" id="toast"></div>
 
 <script>
+/* ====== ONLINE SYNC SETTING ======
+   Paste your Firebase Realtime Database URL between the quotes, e.g.
+   'https://my-tasks-default-rtdb.firebaseio.com'
+   (or leave empty and enter it later in Admin > Online Sync on each device) */
+const FIREBASE_URL = '';
+
 const KEY = 'familyTaskTracker.v1';
 const USER_KEY = 'familyTaskTracker.user';
 const USERS = ['Islam','Engy'];
@@ -227,12 +244,80 @@ let data, user, current, adminSel;
 
 function load(){
   try{ data = JSON.parse(localStorage.getItem(KEY)); }catch(e){ data = null; }
-  if(!data || !Array.isArray(data.tabs)){ data = defaultData(); save(); }
+  if(!data || !data.tabs){ data = defaultData(); data.updatedAt = 0; localStorage.setItem(KEY, JSON.stringify(data)); } else normalize(data);
+}
+function normalize(d){
+  if(!d) return d;
+  d.tabs = Array.isArray(d.tabs) ? d.tabs : Object.values(d.tabs||{});
+  d.tabs.forEach(t=>{ t.tasks = Array.isArray(t.tasks) ? t.tasks : Object.values(t.tasks||{}); });
+  d.updatedAt = d.updatedAt || 0;
+  return d;
 }
 function save(){
+  data.updatedAt = Date.now();
   try{ localStorage.setItem(KEY, JSON.stringify(data)); }
   catch(e){ toast('⚠️ Could not save (storage blocked)'); }
+  schedulePush();
 }
+
+/* ---------- ONLINE SYNC (Firebase Realtime Database, REST) ---------- */
+function dbUrl(){
+  let u = FIREBASE_URL || ''; try{ u = u || localStorage.getItem('familyTaskTracker.db') || ''; }catch(e){}
+  return u.trim().replace(/\/+$/,'');
+}
+let pushTimer=null, pushing=false, pending=false;
+function setSync(txt){
+  const c=document.getElementById('syncChip'); if(c) c.textContent=txt;
+  const a=document.getElementById('syncStatusTxt'); if(a) a.textContent=txt;
+}
+function schedulePush(){
+  if(!dbUrl()) return;
+  pending=true; setSync('☁️ Saving…');
+  clearTimeout(pushTimer); pushTimer=setTimeout(push,400);
+}
+async function push(){
+  const u=dbUrl(); if(!u) return;
+  if(pushing){ schedulePush(); return; }
+  pushing=true;
+  try{
+    const r=await fetch(u+'/tracker.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!r.ok) throw new Error(r.status);
+    pending=false; setSync('☁️ Synced');
+  }catch(e){ setSync('⚠️ Offline – will retry'); setTimeout(schedulePush,8000); }
+  pushing=false;
+}
+async function pull(manual){
+  const u=dbUrl(); if(!u){ setSync(''); return; }
+  if(pending||pushing) return;
+  try{
+    const r=await fetch(u+'/tracker.json',{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const remote=normalize(await r.json());
+    if(!remote){ push(); return; }                 // first device: upload local data
+    if(remote.updatedAt > data.updatedAt){
+      data = remote;
+      try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){}
+      if(!tabById(current)) current=(data.tabs[0]||{}).id;
+      const ae=document.activeElement;
+      const typing = ae && ae.tagName==='INPUT' && ae.type==='text';
+      if(!document.getElementById('app').classList.contains('hidden') && !typing){
+        if(document.getElementById('view-admin').classList.contains('hidden')) renderTasks(); else renderAdmin();
+      }
+      if(manual) toast('Updated from cloud ✓');
+    } else if(remote.updatedAt < data.updatedAt){ push(); return; }
+    setSync('☁️ Synced');
+    if(manual) toast('Synced ✓');
+  }catch(e){ setSync('⚠️ Offline'); if(manual) toast('⚠️ Cannot reach database'); }
+}
+function saveDbUrl(){
+  let v=document.getElementById('dbUrl').value.trim();
+  if(v && !/^https:\/\/.+/i.test(v)){ toast('⚠️ URL must start with https://'); return; }
+  try{ localStorage.setItem('familyTaskTracker.db', v); }catch(e){}
+  if(!v){ setSync(''); toast('Sync disabled'); return; }
+  pull(true);
+}
+setInterval(()=>{ if(!document.hidden) pull(); },5000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); });
 const tabById = id => data.tabs.find(t=>t.id===id);
 
 /* ---------- LOGIN ---------- */
@@ -265,7 +350,7 @@ function showView(v){
   document.getElementById('view-tasks').classList.toggle('hidden', v!=='tasks');
   document.getElementById('view-admin').classList.toggle('hidden', v!=='admin');
   document.getElementById('adminBtn').textContent = v==='admin' ? '← Back' : '⚙️ Admin';
-  if(v==='admin'){ adminSel = tabById(adminSel)?adminSel:(current||(data.tabs[0]||{}).id); renderAdmin(); }
+  if(v==='admin'){ document.getElementById('dbUrl').value = dbUrl(); adminSel = tabById(adminSel)?adminSel:(current||(data.tabs[0]||{}).id); renderAdmin(); }
   else renderTasks();
   window.scrollTo({top:0});
 }
@@ -415,7 +500,7 @@ function importData(input){
   r.onload = async () => {
     try{
       const d = JSON.parse(r.result);
-      if(!d || !Array.isArray(d.tabs)) throw 0;
+      if(!d || !d.tabs) throw 0; normalize(d);
       if(!await confirmDlg('Import backup?','This replaces all current data on this device.')) return;
       data = d; save(); current = (data.tabs[0]||{}).id; adminSel = current; renderAdmin(); toast('Imported ✓');
     }catch(e){ toast('⚠️ Invalid backup file'); }
@@ -449,6 +534,7 @@ load();
 let saved = null; try{ saved = localStorage.getItem(USER_KEY); }catch(e){}
 if(USERS.includes(saved)){ user = saved; showApp(); }
 else document.getElementById('login').classList.remove('hidden');
+pull();
 </script>
 </body>
 </html>
