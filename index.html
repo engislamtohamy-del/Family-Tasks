@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6c5ce7">
+<title>Family Task Tracker</title>
+<style>
+:root{
+  --bg:#f4f3ff; --card:#ffffff; --text:#25233a; --muted:#8a88a3; --line:#ebe9fa;
+  --primary:#6c5ce7; --primary-2:#a29bfe; --ok:#00b894; --danger:#e17055;
+  --accent:#6c5ce7; --shadow:0 8px 30px rgba(108,92,231,.12); --radius:18px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:260px;background:linear-gradient(135deg,#6c5ce7,#a29bfe 60%,#fd79a8);z-index:-1;border-radius:0 0 40px 40px}
+button{font:inherit;cursor:pointer;border:0}
+input,select{font:inherit}
+.hidden{display:none!important}
+
+/* LOGIN */
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{background:var(--card);border-radius:28px;box-shadow:var(--shadow);padding:36px 28px;width:100%;max-width:420px;text-align:center}
+.logo{font-size:52px;margin-bottom:6px}
+.login-card h1{margin:0 0 6px;font-size:26px}
+.login-card p{margin:0 0 24px;color:var(--muted)}
+.user-btn{display:flex;align-items:center;gap:16px;width:100%;padding:16px 18px;margin-bottom:14px;border-radius:18px;background:#f7f6ff;border:2px solid transparent;transition:.2s;text-align:left}
+.user-btn:hover{border-color:var(--primary-2);transform:translateY(-2px);box-shadow:var(--shadow)}
+.avatar{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:700;color:#fff;flex:none}
+.user-btn b{font-size:19px;display:block}
+.user-btn small{color:var(--muted)}
+
+/* APP */
+#app{max-width:820px;margin:0 auto;padding:18px 16px 90px}
+header.top{display:flex;align-items:center;justify-content:space-between;color:#fff;margin-bottom:16px}
+.hello small{opacity:.85;display:block}
+.hello h2{margin:0;font-size:24px}
+.top-actions{display:flex;gap:8px}
+.icon-btn{background:rgba(255,255,255,.2);color:#fff;padding:10px 14px;border-radius:14px;font-weight:600;backdrop-filter:blur(6px);transition:.2s}
+.icon-btn:hover{background:rgba(255,255,255,.35)}
+
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 12px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.22);color:#fff;font-weight:600;transition:.2s;white-space:nowrap}
+.tab .pct{background:rgba(255,255,255,.28);border-radius:999px;padding:2px 8px;font-size:12px}
+.tab.active{background:#fff;color:var(--tc,var(--primary));box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.tab.active .pct{background:var(--tc,var(--primary));color:#fff}
+
+.panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:16px}
+.progress-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px;gap:12px}
+.progress-head h3{margin:0;font-size:22px}
+.progress-head span.sub{color:var(--muted);font-size:14px}
+.big-pct{font-size:40px;font-weight:800;color:var(--accent);line-height:1}
+.bar{height:14px;background:var(--line);border-radius:999px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--primary-2));border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.bar.full>i{background:linear-gradient(90deg,#00b894,#55efc4)}
+.stats{display:flex;gap:10px;margin-top:14px}
+.stat{flex:1;background:#f7f6ff;border-radius:14px;padding:10px;text-align:center}
+.stat b{display:block;font-size:20px}
+.stat small{color:var(--muted)}
+
+.add-row{display:flex;gap:8px;margin-bottom:14px}
+.add-row input{flex:1;padding:13px 16px;border:2px solid var(--line);border-radius:14px;outline:none;background:#fcfcff;transition:.2s}
+.add-row input:focus{border-color:var(--primary-2)}
+.btn{padding:12px 18px;border-radius:14px;background:var(--accent);color:#fff;font-weight:700;transition:.2s}
+.btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn.ghost{background:#f1efff;color:var(--primary)}
+.btn.danger{background:#ffeae5;color:var(--danger)}
+.btn.sm{padding:8px 12px;font-size:14px;border-radius:10px}
+
+.section-label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 4px 8px}
+.task{display:flex;align-items:center;gap:14px;padding:14px;border-radius:14px;background:#fff;border:1px solid var(--line);margin-bottom:8px;transition:.25s;animation:pop .3s ease}
+.task:hover{box-shadow:0 4px 14px rgba(108,92,231,.1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.chk{appearance:none;-webkit-appearance:none;width:28px;height:28px;border-radius:9px;border:2.5px solid #cfcbf3;background:#fff;cursor:pointer;flex:none;display:grid;place-items:center;transition:.2s}
+.chk:hover{border-color:var(--accent)}
+.chk:checked{background:var(--ok);border-color:var(--ok)}
+.chk:checked::after{content:"";width:6px;height:12px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.task .t{flex:1;font-size:16px;word-break:break-word}
+.task .by{font-size:12px;color:var(--muted);white-space:nowrap}
+.task.done{background:#f6fbf9;opacity:.8}
+.task.done .t{text-decoration:line-through;color:var(--muted)}
+.empty{text-align:center;color:var(--muted);padding:30px 10px}
+.empty .e{font-size:42px}
+.celebrate{text-align:center;background:linear-gradient(135deg,#00b894,#55efc4);color:#fff;border-radius:14px;padding:12px;font-weight:700;margin-bottom:14px}
+
+/* ADMIN */
+.admin-title{display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px;color:#fff}
+.admin-title h2{margin:0}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.row input[type=text]{flex:1;min-width:120px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;outline:none}
+.row input[type=text]:focus{border-color:var(--primary-2)}
+.row input.emoji{flex:none;width:58px;text-align:center;font-size:20px;min-width:0}
+.row input[type=color]{width:42px;height:42px;border:0;border-radius:12px;padding:0;background:none;cursor:pointer}
+.row select{padding:11px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;flex:1;min-width:140px}
+.panel h3{margin:0 0 14px}
+.panel .hint{color:var(--muted);font-size:14px;margin:-8px 0 14px}
+.mini{width:36px;height:36px;border-radius:10px;background:#f1efff;color:var(--primary);font-weight:700}
+.mini.del{background:#ffeae5;color:var(--danger)}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:#25233a;color:#fff;padding:12px 20px;border-radius:14px;opacity:0;transition:.3s;z-index:50;font-size:14px}
+.toast.show{transform:translateX(-50%);opacity:1}
+dialog{border:0;border-radius:20px;padding:24px;max-width:360px;width:calc(100% - 40px);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(37,35,58,.5)}
+dialog h3{margin:0 0 8px}
+dialog p{color:var(--muted);margin:0 0 18px}
+dialog .actions{display:flex;gap:8px;justify-content:flex-end}
+@media(max-width:480px){.big-pct{font-size:32px}.hello h2{font-size:20px}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="hidden">
+  <div class="login-card">
+    <div class="logo">✅</div>
+    <h1>Family Task Tracker</h1>
+    <p>Who is using the app now?</p>
+    <button class="user-btn" onclick="login('Islam')">
+      <div class="avatar" style="background:linear-gradient(135deg,#6c5ce7,#a29bfe)">I</div>
+      <div><b>Islam</b><small>Tap to continue</small></div>
+    </button>
+    <button class="user-btn" onclick="login('Engy')">
+      <div class="avatar" style="background:linear-gradient(135deg,#fd79a8,#e84393)">E</div>
+      <div><b>Engy</b><small>Tap to continue</small></div>
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="hidden">
+  <header class="top">
+    <div class="hello"><small id="greet">Hello</small><h2 id="who"></h2></div>
+    <div class="top-actions">
+      <button class="icon-btn" id="adminBtn" onclick="toggleAdmin()">⚙️ Admin</button>
+      <button class="icon-btn" onclick="logout()">↩ Switch</button>
+    </div>
+  </header>
+
+  <!-- TASKS VIEW -->
+  <div id="view-tasks">
+    <div class="tabs" id="tabs"></div>
+    <div class="panel" id="progressPanel"></div>
+    <div class="panel">
+      <div class="add-row">
+        <input id="quickAdd" type="text" placeholder="Add a new task…" maxlength="200">
+        <button class="btn" onclick="quickAdd()">＋ Add</button>
+      </div>
+      <div id="taskList"></div>
+    </div>
+  </div>
+
+  <!-- ADMIN VIEW -->
+  <div id="view-admin" class="hidden">
+    <div class="admin-title"><h2>⚙️ Admin</h2></div>
+
+    <div class="panel">
+      <h3>Tabs</h3>
+      <p class="hint">Rename, re-order, recolor, delete or add tabs. Changes save automatically.</p>
+      <div id="adminTabs"></div>
+      <div class="row" style="margin-top:14px">
+        <input type="text" class="emoji" id="newTabIcon" value="📌" maxlength="4">
+        <input type="text" id="newTabName" placeholder="New tab name…" maxlength="30">
+        <button class="btn" onclick="addTab()">＋ Add tab</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Tasks</h3>
+      <div class="row">
+        <select id="adminTabSelect" onchange="adminSel=this.value;renderAdminTasks()"></select>
+        <button class="btn ghost sm" onclick="resetTab()">↺ Uncheck all</button>
+        <button class="btn danger sm" onclick="clearDone()">🗑 Remove done</button>
+      </div>
+      <div class="row">
+        <input type="text" id="newTaskText" placeholder="New task…" maxlength="200">
+        <button class="btn" onclick="adminAddTask()">＋ Add task</button>
+      </div>
+      <div id="adminTasks"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Backup & Sync</h3>
+      <p class="hint">Data is saved in this browser only. To move it to another device, export here and import there.</p>
+      <div class="row">
+        <button class="btn" onclick="exportData()">⬇ Export backup</button>
+        <button class="btn ghost" onclick="document.getElementById('importFile').click()">⬆ Import backup</button>
+        <input type="file" id="importFile" accept="application/json" class="hidden" onchange="importData(this)">
+      </div>
+      <div class="row">
+        <button class="btn danger" onclick="factoryReset()">Reset everything to default</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <h3 id="dlgTitle"></h3><p id="dlgMsg"></p>
+  <div class="actions">
+    <button class="btn ghost sm" onclick="dlgClose(false)">Cancel</button>
+    <button class="btn danger sm" onclick="dlgClose(true)">Confirm</button>
+  </div>
+</dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY = 'familyTaskTracker.v1';
+const USER_KEY = 'familyTaskTracker.user';
+const USERS = ['Islam','Engy'];
+const COLORS = ['#6c5ce7','#e84393','#00b894','#e17055','#0984e3','#fdcb6e'];
+
+const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-3);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function defaultData(){
+  const mk = (name,icon,color,tasks)=>({id:uid(),name,icon,color,tasks:tasks.map(t=>({id:uid(),text:t,done:false,doneAt:null,doneBy:null}))});
+  return { tabs:[
+    mk('Islam','👨','#6c5ce7',['Review weekly plan','Pay bills','Exercise 30 minutes']),
+    mk('Engy','👩','#e84393',['Plan the week','Call family','Read 20 pages']),
+    mk('Home','🏠','#00b894',['Buy groceries','Clean the kitchen','Fix the lights']),
+    mk('Girls','👧','#e17055',['Homework','Tidy up the room','Prepare school bags'])
+  ]};
+}
+
+let data, user, current, adminSel;
+
+function load(){
+  try{ data = JSON.parse(localStorage.getItem(KEY)); }catch(e){ data = null; }
+  if(!data || !Array.isArray(data.tabs)){ data = defaultData(); save(); }
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(data)); }
+  catch(e){ toast('⚠️ Could not save (storage blocked)'); }
+}
+const tabById = id => data.tabs.find(t=>t.id===id);
+
+/* ---------- LOGIN ---------- */
+function login(name){
+  user = name;
+  try{ localStorage.setItem(USER_KEY, name); }catch(e){}
+  showApp();
+}
+function logout(){
+  try{ localStorage.removeItem(USER_KEY); }catch(e){}
+  user = null;
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login').classList.remove('hidden');
+}
+function showApp(){
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  const h = new Date().getHours();
+  document.getElementById('greet').textContent = h<12?'Good morning ☀️':h<18?'Good afternoon 🌤':'Good evening 🌙';
+  document.getElementById('who').textContent = user;
+  if(!current || !tabById(current)){
+    const mine = data.tabs.find(t=>t.name.toLowerCase()===user.toLowerCase());
+    current = (mine||data.tabs[0]||{}).id;
+  }
+  showView('tasks');
+}
+
+/* ---------- VIEWS ---------- */
+function showView(v){
+  document.getElementById('view-tasks').classList.toggle('hidden', v!=='tasks');
+  document.getElementById('view-admin').classList.toggle('hidden', v!=='admin');
+  document.getElementById('adminBtn').textContent = v==='admin' ? '← Back' : '⚙️ Admin';
+  if(v==='admin'){ adminSel = tabById(adminSel)?adminSel:(current||(data.tabs[0]||{}).id); renderAdmin(); }
+  else renderTasks();
+  window.scrollTo({top:0});
+}
+function toggleAdmin(){ showView(document.getElementById('view-admin').classList.contains('hidden')?'admin':'tasks'); }
+
+/* ---------- TASKS ---------- */
+function stats(tab){
+  const total = tab.tasks.length, done = tab.tasks.filter(t=>t.done).length;
+  return {total, done, left: total-done, pct: total? Math.round(done/total*100):0};
+}
+function renderTasks(){
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = data.tabs.map(t=>{
+    const s = stats(t);
+    return `<button class="tab ${t.id===current?'active':''}" style="--tc:${t.color}" onclick="selectTab('${t.id}')">${esc(t.icon)} ${esc(t.name)} <span class="pct">${s.pct}%</span></button>`;
+  }).join('');
+  const tab = tabById(current);
+  const prog = document.getElementById('progressPanel');
+  const list = document.getElementById('taskList');
+  if(!tab){
+    prog.innerHTML = ''; list.innerHTML = '<div class="empty"><div class="e">📭</div>No tabs yet. Open Admin to add one.</div>';
+    return;
+  }
+  document.documentElement.style.setProperty('--accent', tab.color);
+  const s = stats(tab);
+  prog.innerHTML = `
+    <div class="progress-head">
+      <div><h3>${esc(tab.icon)} ${esc(tab.name)}</h3><span class="sub">${s.done} of ${s.total} tasks completed</span></div>
+      <div class="big-pct">${s.pct}%</div>
+    </div>
+    <div class="bar ${s.pct===100&&s.total?'full':''}"><i style="width:${s.pct}%"></i></div>
+    <div class="stats">
+      <div class="stat"><b>${s.total}</b><small>Total</small></div>
+      <div class="stat"><b style="color:#00b894">${s.done}</b><small>Done</small></div>
+      <div class="stat"><b style="color:#e17055">${s.left}</b><small>Remaining</small></div>
+    </div>`;
+  const open = tab.tasks.filter(t=>!t.done);
+  const done = tab.tasks.filter(t=>t.done).sort((a,b)=>(a.doneAt||0)-(b.doneAt||0));
+  let html = '';
+  if(s.total && s.pct===100) html += '<div class="celebrate">🎉 All done! Great job!</div>';
+  if(!s.total) html = '<div class="empty"><div class="e">📝</div>No tasks yet. Add your first one above.</div>';
+  if(open.length){ html += '<div class="section-label">To do</div>' + open.map(taskHTML).join(''); }
+  if(done.length){ html += '<div class="section-label">Completed</div>' + done.map(taskHTML).join(''); }
+  list.innerHTML = html;
+}
+function taskHTML(t){
+  const by = t.done && t.doneBy ? `<span class="by">✓ ${esc(t.doneBy)}</span>` : '';
+  return `<label class="task ${t.done?'done':''}"><input type="checkbox" class="chk" ${t.done?'checked':''} onchange="toggleTask('${t.id}')"><span class="t">${esc(t.text)}</span>${by}</label>`;
+}
+function selectTab(id){ current = id; renderTasks(); }
+function toggleTask(id){
+  const tab = tabById(current); const t = tab.tasks.find(x=>x.id===id); if(!t) return;
+  t.done = !t.done; t.doneAt = t.done ? Date.now() : null; t.doneBy = t.done ? user : null;
+  save(); renderTasks();
+}
+function quickAdd(){
+  const inp = document.getElementById('quickAdd'); const v = inp.value.trim();
+  const tab = tabById(current); if(!v || !tab) return;
+  tab.tasks.push({id:uid(),text:v,done:false,doneAt:null,doneBy:null});
+  inp.value=''; save(); renderTasks(); inp.focus();
+}
+
+/* ---------- ADMIN ---------- */
+function renderAdmin(){ renderAdminTabs(); renderAdminTasks(); }
+function renderAdminTabs(){
+  document.getElementById('adminTabs').innerHTML = data.tabs.map((t,i)=>`
+    <div class="row">
+      <input type="text" class="emoji" value="${esc(t.icon)}" maxlength="4" onchange="editTab('${t.id}','icon',this.value)">
+      <input type="text" value="${esc(t.name)}" maxlength="30" onchange="editTab('${t.id}','name',this.value)">
+      <input type="color" value="${t.color}" onchange="editTab('${t.id}','color',this.value)">
+      <button class="mini" ${i===0?'disabled style="opacity:.35"':''} onclick="moveTab(${i},-1)">↑</button>
+      <button class="mini" ${i===data.tabs.length-1?'disabled style="opacity:.35"':''} onclick="moveTab(${i},1)">↓</button>
+      <button class="mini del" onclick="deleteTab('${t.id}')">✕</button>
+    </div>`).join('') || '<div class="empty">No tabs.</div>';
+  const sel = document.getElementById('adminTabSelect');
+  sel.innerHTML = data.tabs.map(t=>`<option value="${t.id}" ${t.id===adminSel?'selected':''}>${esc(t.icon)} ${esc(t.name)}</option>`).join('');
+}
+function renderAdminTasks(){
+  const tab = tabById(adminSel); const el = document.getElementById('adminTasks');
+  if(!tab){ el.innerHTML = '<div class="empty">Select or create a tab first.</div>'; return; }
+  el.innerHTML = tab.tasks.map((t,i)=>`
+    <div class="row">
+      <input type="checkbox" class="chk" ${t.done?'checked':''} onchange="adminToggle('${t.id}')">
+      <input type="text" value="${esc(t.text)}" maxlength="200" onchange="editTask('${t.id}',this.value)">
+      <button class="mini" ${i===0?'disabled style="opacity:.35"':''} onclick="moveTask(${i},-1)">↑</button>
+      <button class="mini" ${i===tab.tasks.length-1?'disabled style="opacity:.35"':''} onclick="moveTask(${i},1)">↓</button>
+      <button class="mini del" onclick="deleteTask('${t.id}')">✕</button>
+    </div>`).join('') || '<div class="empty">No tasks in this tab.</div>';
+}
+function editTab(id,field,val){
+  const t = tabById(id); if(!t) return;
+  val = val.trim(); if(field!=='color' && !val){ renderAdminTabs(); return; }
+  t[field]=val; save(); renderAdminTabs(); toast('Saved ✓');
+}
+function moveTab(i,d){ const j=i+d; if(j<0||j>=data.tabs.length) return; [data.tabs[i],data.tabs[j]]=[data.tabs[j],data.tabs[i]]; save(); renderAdminTabs(); }
+function addTab(){
+  const n = document.getElementById('newTabName'), ic = document.getElementById('newTabIcon');
+  const name = n.value.trim(); if(!name){ n.focus(); return; }
+  const t = {id:uid(), name, icon: ic.value.trim()||'📌', color: COLORS[data.tabs.length%COLORS.length], tasks:[]};
+  data.tabs.push(t); adminSel = t.id; n.value=''; save(); renderAdmin(); toast('Tab added ✓');
+}
+async function deleteTab(id){
+  const t = tabById(id);
+  if(!await confirmDlg('Delete tab?', `"${t.name}" and all its ${t.tasks.length} tasks will be removed.`)) return;
+  data.tabs = data.tabs.filter(x=>x.id!==id);
+  if(current===id) current = (data.tabs[0]||{}).id;
+  if(adminSel===id) adminSel = (data.tabs[0]||{}).id;
+  save(); renderAdmin();
+}
+function adminAddTask(){
+  const inp = document.getElementById('newTaskText'); const v = inp.value.trim(); const tab = tabById(adminSel);
+  if(!v||!tab) return;
+  tab.tasks.push({id:uid(),text:v,done:false,doneAt:null,doneBy:null});
+  inp.value=''; save(); renderAdminTasks(); inp.focus();
+}
+function editTask(id,val){
+  const tab = tabById(adminSel); const t = tab.tasks.find(x=>x.id===id); val = val.trim();
+  if(!val){ renderAdminTasks(); return; } t.text = val; save(); toast('Saved ✓');
+}
+function adminToggle(id){
+  const t = tabById(adminSel).tasks.find(x=>x.id===id);
+  t.done=!t.done; t.doneAt=t.done?Date.now():null; t.doneBy=t.done?user:null; save();
+}
+function deleteTask(id){ const tab=tabById(adminSel); tab.tasks=tab.tasks.filter(x=>x.id!==id); save(); renderAdminTasks(); }
+function moveTask(i,d){ const a=tabById(adminSel).tasks, j=i+d; if(j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; save(); renderAdminTasks(); }
+async function resetTab(){
+  const tab=tabById(adminSel); if(!tab) return;
+  if(!await confirmDlg('Uncheck all?', `Mark every task in "${tab.name}" as not done.`)) return;
+  tab.tasks.forEach(t=>{t.done=false;t.doneAt=null;t.doneBy=null}); save(); renderAdminTasks(); toast('Reset ✓');
+}
+async function clearDone(){
+  const tab=tabById(adminSel); if(!tab) return;
+  if(!await confirmDlg('Remove done tasks?', `Completed tasks in "${tab.name}" will be deleted.`)) return;
+  tab.tasks = tab.tasks.filter(t=>!t.done); save(); renderAdminTasks(); toast('Removed ✓');
+}
+
+/* ---------- BACKUP ---------- */
+function exportData(){
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'task-tracker-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function importData(input){
+  const f = input.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = async () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!d || !Array.isArray(d.tabs)) throw 0;
+      if(!await confirmDlg('Import backup?','This replaces all current data on this device.')) return;
+      data = d; save(); current = (data.tabs[0]||{}).id; adminSel = current; renderAdmin(); toast('Imported ✓');
+    }catch(e){ toast('⚠️ Invalid backup file'); }
+    input.value='';
+  };
+  r.readAsText(f);
+}
+async function factoryReset(){
+  if(!await confirmDlg('Reset everything?','All tabs and tasks will be replaced with the default ones.')) return;
+  data = defaultData(); save(); current = data.tabs[0].id; adminSel = current; renderAdmin(); toast('Reset ✓');
+}
+
+/* ---------- HELPERS ---------- */
+let dlgResolve;
+function confirmDlg(title,msg){
+  document.getElementById('dlgTitle').textContent = title;
+  document.getElementById('dlgMsg').textContent = msg;
+  document.getElementById('dlg').showModal();
+  return new Promise(r=>dlgResolve=r);
+}
+function dlgClose(v){ document.getElementById('dlg').close(); if(dlgResolve) dlgResolve(v); }
+document.getElementById('dlg').addEventListener('cancel',()=>{ if(dlgResolve) dlgResolve(false); });
+let toastT;
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
+document.getElementById('quickAdd').addEventListener('keydown',e=>{ if(e.key==='Enter') quickAdd(); });
+document.getElementById('newTaskText').addEventListener('keydown',e=>{ if(e.key==='Enter') adminAddTask(); });
+document.getElementById('newTabName').addEventListener('keydown',e=>{ if(e.key==='Enter') addTab(); });
+
+/* ---------- INIT ---------- */
+load();
+let saved = null; try{ saved = localStorage.getItem(USER_KEY); }catch(e){}
+if(USERS.includes(saved)){ user = saved; showApp(); }
+else document.getElementById('login').classList.remove('hidden');
+</script>
+</body>
+</html>
