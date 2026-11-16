@@ -106,6 +106,15 @@ dialog::backdrop{background:rgba(37,35,58,.5)}
 dialog h3{margin:0 0 8px}
 dialog p{color:var(--muted);margin:0 0 18px}
 dialog .actions{display:flex;gap:8px;justify-content:flex-end}
+.btn.icon{padding:12px 13px;font-size:18px;line-height:1}
+#busy{position:fixed;inset:0;background:rgba(37,35,58,.6);display:flex;align-items:center;justify-content:center;z-index:60;color:#fff;text-align:center;padding:20px}
+#busy .box{background:#25233a;border-radius:20px;padding:26px 30px;max-width:300px}
+#busy .spin{width:42px;height:42px;border:5px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;margin:0 auto 14px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#ocrDlg{max-width:460px}
+#ocrList{max-height:50vh;overflow:auto;margin:0 -4px 14px;padding:0 4px}
+#ocrList .row{margin-bottom:8px;flex-wrap:nowrap}
+.dupTag{font-size:11px;background:#fff1d6;color:#b7791f;border-radius:8px;padding:3px 7px;white-space:nowrap}
 @media(max-width:480px){.big-pct{font-size:32px}.hello h2{font-size:20px}}
 </style>
 </head>
@@ -144,8 +153,12 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
     <div class="panel" id="progressPanel"></div>
     <div class="panel">
       <div class="add-row">
-        <input id="quickAdd" type="text" placeholder="Add a new task…" maxlength="200">
+        <input id="quickAdd" type="text" dir="auto" placeholder="Add a new task…" maxlength="200">
         <button class="btn" onclick="quickAdd()">＋ Add</button>
+        <button class="btn ghost icon" title="Take a photo" onclick="document.getElementById('camIn').click()">📷</button>
+        <button class="btn ghost icon" title="Choose a picture" onclick="document.getElementById('galIn').click()">🖼</button>
+        <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden" onchange="handlePhoto(this)">
+        <input type="file" id="galIn" accept="image/*" class="hidden" onchange="handlePhoto(this)">
       </div>
       <div id="taskList"></div>
     </div>
@@ -174,7 +187,7 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
         <button class="btn danger sm" onclick="clearDone()">🗑 Remove done</button>
       </div>
       <div class="row">
-        <input type="text" id="newTaskText" placeholder="New task…" maxlength="200">
+        <input type="text" dir="auto" id="newTaskText" placeholder="New task…" maxlength="200">
         <button class="btn" onclick="adminAddTask()">＋ Add task</button>
       </div>
       <div id="adminTasks"></div>
@@ -213,6 +226,16 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
     <button class="btn danger sm" onclick="dlgClose(true)">Confirm</button>
   </div>
 </dialog>
+<dialog id="ocrDlg">
+  <h3>📷 Items found in the picture</h3>
+  <p>Check the list, fix any wrong words, and untick what you don't need. Duplicates are unticked automatically.</p>
+  <div id="ocrList"></div>
+  <div class="actions">
+    <button class="btn ghost sm" onclick="document.getElementById('ocrDlg').close()">Cancel</button>
+    <button class="btn sm" onclick="ocrAdd()">Add selected</button>
+  </div>
+</dialog>
+<div id="busy" class="hidden"><div class="box"><div class="spin"></div><div id="busyTxt">Working…</div></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -236,8 +259,9 @@ function defaultData(){
     mk('Islam','👨','#6c5ce7',['Review weekly plan','Pay bills','Exercise 30 minutes']),
     mk('Engy','👩','#e84393',['Plan the week','Call family','Read 20 pages']),
     mk('Home','🏠','#00b894',['Buy groceries','Clean the kitchen','Fix the lights']),
-    mk('Girls','👧','#e17055',['Homework','Tidy up the room','Prepare school bags'])
-  ]};
+    mk('Girls','👧','#e17055',['Homework','Tidy up the room','Prepare school bags']),
+    Object.assign(mk('طلبات البيت','🛒','#0984e3',['خضار وفاكهة','أدوات تنظيف']),{id:'home-requests'})
+  ], m2:true};
 }
 
 let data, user, current, adminSel;
@@ -245,6 +269,20 @@ let data, user, current, adminSel;
 function load(){
   try{ data = JSON.parse(localStorage.getItem(KEY)); }catch(e){ data = null; }
   if(!data || !data.tabs){ data = defaultData(); data.updatedAt = 0; localStorage.setItem(KEY, JSON.stringify(data)); } else normalize(data);
+}
+/* One-time migration: add the "طلبات البيت" tab to existing data (runs once, never re-adds if deleted) */
+function migrate(){
+  if(!data || data.m2) return false;
+  data.m2 = true;
+  if(!data.tabs.some(t=>t.id==='home-requests')){
+    data.tabs.push({id:'home-requests',name:'طلبات البيت',icon:'🛒',color:'#0984e3',tasks:[]});
+  }
+  save();
+  const ap=document.getElementById('app');
+  if(ap && !ap.classList.contains('hidden')){
+    if(document.getElementById('view-admin').classList.contains('hidden')) renderTasks(); else renderAdmin();
+  }
+  return true;
 }
 function normalize(d){
   if(!d) return d;
@@ -305,6 +343,7 @@ async function pull(manual){
       }
       if(manual) toast('Updated from cloud ✓');
     } else if(remote.updatedAt < data.updatedAt){ push(); return; }
+    migrate();
     setSync('☁️ Synced');
     if(manual) toast('Synced ✓');
   }catch(e){ setSync('⚠️ Offline'); if(manual) toast('⚠️ Cannot reach database'); }
@@ -398,7 +437,7 @@ function renderTasks(){
 }
 function taskHTML(t){
   const by = t.done && t.doneBy ? `<span class="by">✓ ${esc(t.doneBy)}</span>` : '';
-  return `<label class="task ${t.done?'done':''}"><input type="checkbox" class="chk" ${t.done?'checked':''} onchange="toggleTask('${t.id}')"><span class="t">${esc(t.text)}</span>${by}</label>`;
+  return `<label class="task ${t.done?'done':''}"><input type="checkbox" class="chk" ${t.done?'checked':''} onchange="toggleTask('${t.id}')"><span class="t" dir="auto">${esc(t.text)}</span>${by}</label>`;
 }
 function selectTab(id){ current = id; renderTasks(); }
 function toggleTask(id){
@@ -434,7 +473,7 @@ function renderAdminTasks(){
   el.innerHTML = tab.tasks.map((t,i)=>`
     <div class="row">
       <input type="checkbox" class="chk" ${t.done?'checked':''} onchange="adminToggle('${t.id}')">
-      <input type="text" value="${esc(t.text)}" maxlength="200" onchange="editTask('${t.id}',this.value)">
+      <input type="text" dir="auto" value="${esc(t.text)}" maxlength="200" onchange="editTask('${t.id}',this.value)">
       <button class="mini" ${i===0?'disabled style="opacity:.35"':''} onclick="moveTask(${i},-1)">↑</button>
       <button class="mini" ${i===tab.tasks.length-1?'disabled style="opacity:.35"':''} onclick="moveTask(${i},1)">↓</button>
       <button class="mini del" onclick="deleteTask('${t.id}')">✕</button>
@@ -513,6 +552,88 @@ async function factoryReset(){
   data = defaultData(); save(); current = data.tabs[0].id; adminSel = current; renderAdmin(); toast('Reset ✓');
 }
 
+/* ---------- PHOTO -> TASKS (OCR in the browser, needs internet) ---------- */
+const OCR_SRC='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+let ocrTab=null;
+function loadOcr(){
+  return new Promise((res,rej)=>{
+    if(window.Tesseract) return res();
+    const sc=document.createElement('script'); sc.src=OCR_SRC; sc.onload=res; sc.onerror=()=>rej(new Error('load')); document.head.appendChild(sc);
+  });
+}
+function normTxt(t){
+  return String(t).toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g,'')
+    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+    .replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+}
+function cleanLine(l){
+  l = String(l).replace(/^[\s\-–—•*·●○■□☐☑✓✔\[\]()|_.>]+/,'').replace(/^[\d٠-٩]+\s*[.)\-:،]\s*/,'').replace(/\s+/g,' ').trim();
+  return (l.length>=2 && /\p{L}/u.test(l)) ? l : '';
+}
+function showBusy(t){ document.getElementById('busyTxt').textContent=t; document.getElementById('busy').classList.remove('hidden'); }
+function hideBusy(){ document.getElementById('busy').classList.add('hidden'); }
+function imgToCanvas(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), im=new Image();
+    im.onload=()=>{
+      const k=Math.min(1,1800/Math.max(im.width,im.height));
+      const c=document.createElement('canvas'); c.width=Math.round(im.width*k); c.height=Math.round(im.height*k);
+      const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.drawImage(im,0,0,c.width,c.height);
+      URL.revokeObjectURL(url); res(c);
+    };
+    im.onerror=()=>rej(new Error('img')); im.src=url;
+  });
+}
+async function handlePhoto(input){
+  const f=input.files[0]; input.value=''; if(!f) return;
+  const tab=tabById(current); if(!tab) return;
+  ocrTab=tab.id;
+  showBusy('Preparing…');
+  try{
+    await loadOcr();
+    showBusy('Loading reader… (first time takes longer)');
+    const cv=await imgToCanvas(f);
+    const w=await Tesseract.createWorker('ara+eng',1,{logger:m=>{
+      if(m.status==='recognizing text') showBusy('Reading picture… '+Math.round((m.progress||0)*100)+'%');
+    }});
+    const r=await w.recognize(cv); await w.terminate();
+    hideBusy(); openOcr(r.data.text||'');
+  }catch(e){ hideBusy(); toast('⚠️ Could not read the picture (internet is needed)'); }
+}
+function openOcr(text){
+  const tab=tabById(ocrTab); if(!tab) return;
+  const have=new Set(tab.tasks.map(t=>normTxt(t.text)));
+  const seen=new Set(), items=[];
+  text.split(/\r?\n/).forEach(raw=>{
+    const l=cleanLine(raw); if(!l) return;
+    const n=normTxt(l); if(!n) return;
+    const dup = have.has(n) || seen.has(n); seen.add(n);
+    items.push({l,dup});
+  });
+  if(!items.length){ toast('No text found in the picture'); return; }
+  document.getElementById('ocrList').innerHTML = items.map(it=>`
+    <div class="row"><input type="checkbox" class="chk" ${it.dup?'':'checked'}>
+    <input type="text" dir="auto" value="${esc(it.l)}" maxlength="200">${it.dup?'<span class="dupTag">duplicate</span>':''}</div>`).join('');
+  document.getElementById('ocrDlg').showModal();
+}
+function ocrAdd(){
+  const tab=tabById(ocrTab); if(!tab) return;
+  const have=new Set(tab.tasks.map(t=>normTxt(t.text)));
+  let added=0, skipped=0;
+  document.querySelectorAll('#ocrList .row').forEach(r=>{
+    if(!r.querySelector('.chk').checked) return;
+    const v=cleanLine(r.querySelector('input[type=text]').value); const n=normTxt(v);
+    if(!v||!n) return;
+    if(have.has(n)){ skipped++; return; }
+    have.add(n); tab.tasks.push({id:uid(),text:v,done:false,doneAt:null,doneBy:null}); added++;
+  });
+  document.getElementById('ocrDlg').close();
+  if(added) save();
+  renderTasks();
+  toast(`Added ${added}`+(skipped?` · skipped ${skipped} duplicate${skipped>1?'s':''}`:''));
+}
+
 /* ---------- HELPERS ---------- */
 let dlgResolve;
 function confirmDlg(title,msg){
@@ -534,6 +655,7 @@ load();
 let saved = null; try{ saved = localStorage.getItem(USER_KEY); }catch(e){}
 if(USERS.includes(saved)){ user = saved; showApp(); }
 else document.getElementById('login').classList.remove('hidden');
+if(!dbUrl()) migrate();
 pull();
 </script>
 </body>
