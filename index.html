@@ -205,6 +205,14 @@ dialog .actions{display:flex;gap:8px;justify-content:flex-end}
     </div>
 
     <div class="panel">
+      <h3>✨ Smart Photo Reader (handwriting & Arabic)</h3>
+      <p class="hint">Reads handwritten lists accurately using Google Gemini (free key from aistudio.google.com/apikey). The key is saved only on this device. Pictures are sent to Google for reading. Leave empty to use the basic reader.</p>
+      <div class="row"><input type="text" id="aiKey" placeholder="Paste Gemini API key" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="row"><input type="text" id="aiModel" placeholder="Model (optional, default gemini-2.5-flash)" autocapitalize="off" spellcheck="false">
+        <button class="btn" onclick="saveAi()">Save</button></div>
+    </div>
+
+    <div class="panel">
       <h3>Backup</h3>
       <p class="hint">Data is saved in this browser only. To move it to another device, export here and import there.</p>
       <div class="row">
@@ -389,7 +397,7 @@ function showView(v){
   document.getElementById('view-tasks').classList.toggle('hidden', v!=='tasks');
   document.getElementById('view-admin').classList.toggle('hidden', v!=='admin');
   document.getElementById('adminBtn').textContent = v==='admin' ? '← Back' : '⚙️ Admin';
-  if(v==='admin'){ document.getElementById('dbUrl').value = dbUrl(); adminSel = tabById(adminSel)?adminSel:(current||(data.tabs[0]||{}).id); renderAdmin(); }
+  if(v==='admin'){ document.getElementById('dbUrl').value = dbUrl(); document.getElementById('aiKey').value = aiKey(); document.getElementById('aiModel').value = lsGet(AI_MODEL); adminSel = tabById(adminSel)?adminSel:(current||(data.tabs[0]||{}).id); renderAdmin(); }
   else renderTasks();
   window.scrollTo({top:0});
 }
@@ -585,21 +593,60 @@ function imgToCanvas(file){
     im.onerror=()=>rej(new Error('img')); im.src=url;
   });
 }
+const AI_KEY='familyTaskTracker.aikey', AI_MODEL='familyTaskTracker.aimodel';
+function lsGet(k){ try{ return (localStorage.getItem(k)||'').trim(); }catch(e){ return ''; } }
+const aiKey=()=>lsGet(AI_KEY), aiModel=()=>lsGet(AI_MODEL)||'gemini-2.5-flash';
+function saveAi(){
+  const k=document.getElementById('aiKey').value.trim(), m=document.getElementById('aiModel').value.trim();
+  try{ localStorage.setItem(AI_KEY,k); localStorage.setItem(AI_MODEL,m); }catch(e){}
+  toast(k?'Smart reader enabled ✓':'Smart reader disabled');
+}
+const AI_PROMPT='This photo shows a handwritten shopping or to-do list, usually in Arabic (it may also contain English). '+
+ 'Extract every handwritten item as its own line, exactly as written, in the original language. '+
+ 'Output only the items, one per line, with no numbering, bullets, headings or commentary. '+
+ 'Ignore printed titles and decorations (for example "Grocery List", "Cooking list") and drawings. '+
+ 'If a word is unreadable, skip that line.';
+async function geminiRead(cv){
+  const key=aiKey();
+  const b64=cv.toDataURL('image/jpeg',0.85).split(',')[1];
+  const body=JSON.stringify({contents:[{parts:[{text:AI_PROMPT},{inlineData:{mimeType:'image/jpeg',data:b64}}]}],generationConfig:{temperature:0}});
+  const models=[...new Set([aiModel(),'gemini-2.0-flash'])];
+  let err='Model not found';
+  for(const m of models){
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(m)+':generateContent',
+      {method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body});
+    let j={}; try{ j=await r.json(); }catch(e){}
+    if(r.status===404){ err=(j.error&&j.error.message)||err; continue; }
+    if(!r.ok) throw new Error((j.error&&j.error.message)||('Error '+r.status));
+    const parts=(((j.candidates||[])[0]||{}).content||{}).parts||[];
+    return parts.map(x=>x.text||'').join('\n');
+  }
+  throw new Error(err);
+}
 async function handlePhoto(input){
   const f=input.files[0]; input.value=''; if(!f) return;
   const tab=tabById(current); if(!tab) return;
   ocrTab=tab.id;
   showBusy('Preparing…');
   try{
-    await loadOcr();
-    showBusy('Loading reader… (first time takes longer)');
     const cv=await imgToCanvas(f);
-    const w=await Tesseract.createWorker('ara+eng',1,{logger:m=>{
-      if(m.status==='recognizing text') showBusy('Reading picture… '+Math.round((m.progress||0)*100)+'%');
-    }});
-    const r=await w.recognize(cv); await w.terminate();
-    hideBusy(); openOcr(r.data.text||'');
-  }catch(e){ hideBusy(); toast('⚠️ Could not read the picture (internet is needed)'); }
+    let text;
+    if(aiKey()){
+      showBusy('Reading handwriting…');
+      text=await geminiRead(cv);
+    }else{
+      await loadOcr();
+      showBusy('Loading reader… (first time takes longer)');
+      const w=await Tesseract.createWorker('ara+eng',1,{logger:m=>{
+        if(m.status==='recognizing text') showBusy('Reading picture… '+Math.round((m.progress||0)*100)+'%');
+      }});
+      const r=await w.recognize(cv); await w.terminate(); text=r.data.text||'';
+    }
+    hideBusy(); openOcr(text);
+  }catch(e){
+    hideBusy();
+    toast(aiKey()?('⚠️ '+String(e.message||e).slice(0,90)):'⚠️ Could not read the picture (internet is needed)');
+  }
 }
 function openOcr(text){
   const tab=tabById(ocrTab); if(!tab) return;
